@@ -101,29 +101,47 @@ async def monitor_users(log_path, db: Database, timeout_min=0.5):
 
 async def auth_handler(request: web.Request) -> web.Response:
     db: Database = request.app['db']
-    data = await request.json()
-    
-    email = data.get('email')
-    ip = data.get('ip')
-    
-    if not email or not ip:
-        return web.json_response({"allow": False}, status=400)
     
     try:
+        data = await request.json()
+        print(f"Получен запрос авторизации: {data}")
+        
+        # Проверяем формат запроса - у новых версий Xray может быть другой формат
+        if 'email' in data and 'ip' in data:
+            # Старый формат
+            email = data.get('email')
+            ip = data.get('ip')
+        elif 'user' in data:
+            # Новый формат (Xray 25.x+)
+            user_obj = data.get('user', {})
+            email = user_obj.get('email', '')
+            ip = data.get('sourceIp', '')
+        else:
+            print("Неизвестный формат запроса")
+            return web.json_response({"reject": True, "message": "Unknown request format"})
+        
+        print(f"Проверка для Email: {email}, IP: {ip}")
+        
+        if not email or not ip:
+            print("Отсутствуют email или IP")
+            return web.json_response({"reject": True, "message": "Missing email or IP"})
+        
+        # Логика проверки количества подключений
         online_count, online_ips = await db.get_user_ips(email)
         
-        if online_count >= 3:
-            allow = ip in online_ips
+        if online_count >= 3 and ip not in online_ips:
+            print(f"Отклонено: достигнут лимит подключений ({online_count})")
+            return web.json_response({
+                "reject": True,
+                "message": f"Limited to 3 connections, currently using {online_count}"
+            })
         else:
-            allow = True
+            print(f"Разрешено: {online_count} активных подключений")
+            return web.json_response({"reject": False})
         
-        allow = False
-            
-        return web.json_response({"allow": allow})
-    
     except Exception as e:
-        print(f"Auth error: {str(e)}")
-        return web.json_response({"allow": False}, status=500)
+        print(f"Ошибка авторизации: {str(e)}")
+        return web.json_response({"reject": True, "message": f"Auth error: {str(e)}"})
 
 async def run_server(db: Database):
     app = web.Application()
