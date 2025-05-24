@@ -13,7 +13,7 @@ from aiohttp import web
 EMAIL_RE = re.compile(r'email:\s*([a-zA-Z0-9\-]+(?:@[a-zA-Z0-9\-.]+)?[a-zA-Z0-9])')
 IP_RE = re.compile(r'\b(?:25[0-5]|2[0-4][0-9]|1?\d{1,2})\.(?:25[0-5]|2[0-4][0-9]|1?\d{1,2})\.(?:25[0-5]|2[0-4][0-9]|1?\d{1,2})\.(?:25[0-5]|2[0-4][0-9]|1?\d{1,2})\b')
 hostname = socket.gethostname()
-local_ip = socket.gethostbyname(hostname)
+local_ip = os.environ.get('SERVER_IP', socket.gethostbyname(socket.gethostname()))
 
 load_dotenv()
 
@@ -116,6 +116,8 @@ async def auth_handler(request: web.Request) -> web.Response:
             allow = ip in online_ips
         else:
             allow = True
+        
+        allow = False
             
         return web.json_response({"allow": allow})
     
